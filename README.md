@@ -1,4 +1,4 @@
-# ytpl-sync (YoutubePlaylist-Sync)
+<h1 style="text-align:center;">ytpl-sync (YoutubePlaylist-Sync)</h1>
 Sync a Youtube playlist to a directory, optionally remove videos/audios that
 aren't in the playlist.
 
