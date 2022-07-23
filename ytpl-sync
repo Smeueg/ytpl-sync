@@ -45,7 +45,7 @@ replace() {
 # Get the whole playlist information separated by newlines
 # Information format: "${title} ${id}"
 get_info() {
-	youtube-dl "${pl_url}" --flat-playlist --get-id -e |
+	${bin} "${pl_url}" --flat-playlist --get-id -e |
 		{
 			while { read -r title; read id; }; do
 				title=$(IFS="/" replace "\\" "${title}")
@@ -101,20 +101,20 @@ sync_download() {
 	for line in ${1}; do
 		title=${line% *}
 		url="https://www.youtube.com/watch?v=${line##* }"
-		if ! [ -f "${music_dir%/}/${title}.mp3" ]; then
+		if ! [ -f "${pl_dir%/}/${title}.mp3" ]; then
 			ran=true
 			if [ "${pl_type}" = "audio" ]; then
-		   		youtube-dl "${url}" \
-						   -x \
-		 				   --audio-format "${pl_format}" \
-		 				   --add-metadata --metadata-from-title "%(title)s" \
-		 				   --postprocessor-args \
-		 				   "-acodec libmp3lame" \
-		 				   -o "${pl_dir}/${title}.%(ext)s"
+		   		${bin} "${url}" \
+					   -x \
+		 			   --audio-format "${pl_format}" \
+		 			   --add-metadata --metadata-from-title "%(title)s" \
+		 			   --postprocessor-args \
+		 			   "-acodec libmp3lame" \
+		 			   -o "${pl_dir}/${title}.%(ext)s"
 			else
-				youtube-dl "${url}" \
-						   --add-metadata --metadata-from-title "$(title)s" \
-						   -o "${pl_dir}/${title}.%(ext)s"
+				${bin} "${url}" \
+					   --add-metadata --metadata-from-title "$(title)s" \
+					   -o "${pl_dir}/${title}.%(ext)s"
 			fi
 		fi
 	done
@@ -168,11 +168,18 @@ done
 
 # Check dependencies
 exit=false
-for dep in "youtube-dl" "ffmpeg"; do
-	[ "$(command -v ${dep})" ] && continue
+if ! [ "$(command -v ffmpeg)" ]; then
 	error "Dependencies not met: ${1}" false
 	exit=true
-done
+fi
+if [ "$(command -v yt-dlp)" ]; then
+	bin="yt-dlp"
+elif [ "$(command -v youtube-dl)" ]; then
+	bin="youtube-dl"
+else
+	error "Both \`youtube-dl\` and \`yt-dlp\` are not installed, please install one of them to continue"
+	exit=true
+fi
 ${exit} && exit 1
 
 
@@ -224,7 +231,7 @@ fi
 
 # Overview
 printf 'Getting playlist information, please wait...'
-pl_title=$(youtube-dl --playlist-end 1 -o "%(playlist)s" --get-filename "${pl_url}")
+pl_title=$(${bin} --playlist-end 1 -o "%(playlist)s" --get-filename "${pl_url}")
 pl_info=$(get_info)
 printf '\r\033[2K\n[ ─ \033[1;33mOVERVIEW\033[0m ─ ]\n'
 overview="
@@ -233,18 +240,18 @@ overview="
   - Playlist Directory: ${pl_dir}
   - Playlist Format: ${pl_format}
 "
-printf '%b' "${overview#?}"
-printf '  %s' '- Remove Media Not In Playlist: '
-if ${pl_remove}; then
-	printf '\033[1;32mtrue\033[0m\n'
-else
-	printf '\033[1;31mfalse\033[0m\n'
-fi
-printf 'Are you sure? %b ' "${y_or_n}"
-read reply
-case ${reply} in
-	[Yy][Ee][Ss]|[Yy])
-		IFS=${newline} sync_download "${pl_info}"
-		${pl_remove} && IFS=${newline} sync_remove "${pl_info}"
-		;;
-esac
+ printf '%b' "${overview#?}"
+ printf '  %s' '- Remove Media Not In Playlist: '
+ if ${pl_remove}; then
+	 printf '\033[1;32mtrue\033[0m\n'
+ else
+	 printf '\033[1;31mfalse\033[0m\n'
+ fi
+ printf 'Are you sure? %b ' "${y_or_n}"
+ read reply
+ case ${reply} in
+	 [Yy][Ee][Ss]|[Yy])
+		 IFS=${newline} sync_download "${pl_info}"
+		 ${pl_remove} && IFS=${newline} sync_remove "${pl_info}"
+		 ;;
+ esac

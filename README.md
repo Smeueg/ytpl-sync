@@ -5,7 +5,7 @@ aren't in the playlist.
 ---
 
 ## Dependencies
-- [youtube-dl](https://youtube-dl.org/)
+- [youtube-dl](https://youtube-dl.org/) or [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 - [ffmpeg](ffmpeg.org)
 
 ## Installation
