@@ -1,0 +1,250 @@
+#!/bin/sh
+
+y_or_n="[\033[1;32my\033[0m/\033[31mN\033[0m]"
+msg_help="
+Usage: ${0##*/} [OPTION...]
+Sync a Youtube playlist to a directory
+
+Options:
+  --help           Show this message.
+  --url URL        Sync URL and don't prompt for a url
+  --dir DIR        Sync to DIR and don't prompt for a directory
+  --format FORMAT  Download media to FORMAT
+  --remove         Remove videos/audios that aren't in the playlist
+                   (use with caution)
+  --format-list    Print the supported formats
+"
+msg_format="
+Supported formats are:
+  - Video: mp4, webm
+  - Audio: aac, flac, mp3, m4a, opus, vorbis, wav
+"
+newline="
+"
+
+error() {
+	printf '[\033[1;31mERROR\033[0m] %s\n' "${1}"
+	if ! [ "${2}" ] || ${2}; then exit 1; fi
+}
+
+notice() {
+	printf '[\033[1;32mNOTICE\033[0m] %s\n' "${1}"
+}
+
+
+# Replace ${1} with ${2} in the variable ${3}
+replace() {
+	str=${3}
+	while ! [ "${str%%*${1}*}" ]; do
+	 	str="${str%%${1}*}${2}${str#*${1}}"
+	done
+	printf '%s\n' "${str}"
+	unset str
+}
+
+# Get the whole playlist information separated by newlines
+# Information format: "${title} ${id}"
+get_info() {
+	youtube-dl "${pl_url}" --flat-playlist --get-id -e |
+		{
+			while { read -r title; read id; }; do
+				title=$(IFS="/" replace "\\" "${title}")
+				title=$(replace "/" "\\" "${title}")
+				tmp="${tmp}${title} ${id}${newline}"
+			done
+			printf '%s\n\n' "${tmp}"
+		}
+}
+
+# Checks whether ${1} is a valid Youtube playlist url
+check_url() {
+	id=${1#https://www.youtube.com/playlist\?list=}
+	[ ${#id} -ne 34 ] && return 1
+	return 0
+}
+
+# Checks whether ${1} is a directory
+check_dir() {
+	[ -d "${1}" ] || return 1
+	return 0
+}
+
+# Checks whether ${1} is a supported format
+check_format() {
+	for format in "mp4" "webm" "aac" "flac" "mp3" "m4a" "opus" "vorbis"; do
+		[ "${1}" = "${format}" ] && return 0
+	done
+	return 1
+}
+
+# Sets ${1} as ${pl_format} or return 1 if it's not a supported format
+set_format() {
+	for format in "mp4" "webm"; do
+		[ "${1}" = "${format}" ] || continue
+		pl_format=${1}
+		pl_type="video"
+		return 0
+	done
+	for format in "aac" "flac" "mp3" "m4a" "opus" "vorbis"; do
+		[ "${1}" = "${format}" ] || continue
+		pl_format=${1}
+		pl_type="audio"
+		return 0
+	done
+	return 1
+}
+
+# Downloads the missing media from the playlist
+sync_download() {
+	printf '\n[ ─ \033[1;34mDOWNLOADING PLAYLIST\033[0m ─ ]\n'
+	ran=false
+	for line in ${1}; do
+		title=${line% *}
+		url="https://www.youtube.com/watch?v=${line##* }"
+		if ! [ -f "${music_dir%/}/${title}.mp3" ]; then
+			ran=true
+			if [ "${pl_type}" = "audio" ]; then
+		   		youtube-dl "${url}" \
+						   -x \
+		 				   --audio-format "${pl_format}" \
+		 				   --add-metadata --metadata-from-title "%(title)s" \
+		 				   --postprocessor-args \
+		 				   "-acodec libmp3lame" \
+		 				   -o "${pl_dir}/${title}.%(ext)s"
+			else
+				youtube-dl "${url}" \
+						   --add-metadata --metadata-from-title "$(title)s" \
+						   -o "${pl_dir}/${title}.%(ext)s"
+			fi
+		fi
+	done
+	${ran} || notice 'No media needed to be downloaded\n'
+}
+
+sync_remove() {
+	# Remove song's that aren't in the playlist anymore
+	printf '\n[ ─ \033[1;31mREMOVING MEDIA\033[0m ─ ]\n'
+	ran=false
+	for file in "${pl_dir%/}"/*; do
+		file=${file#${pl_dir%/}/}
+		for line in ${1}; do
+			[ "${line% *}.${pl_format}" = "${file}" ] && continue 2
+		done
+		ran=true
+		rm -v "${pl_dir%/}/${file}"
+	done
+	${ran} || notice 'No media needed to be removed\n'
+}
+
+# Argument handler
+while [ "${1}" ]; do
+	case ${1} in
+		"--help")
+			printf '%b' "${msg_help#?}"
+			exit 0
+			;;
+		"--url")
+			[ "${2}" ] || error "${1}: No argument given"
+			check_url "${2}" || error "${1}: Invalid url '${2}'"
+			pl_url=${2}
+			shift 2
+			;;
+		"--dir")
+			[ "${2}" ] || error "${1}: No argument given"
+			check_dir "${2}" || error "${1}: Directory '${2}' doesn't exist"
+			pl_dir=${2}
+			shift 2
+			;;
+		"--format")
+			[ "${2}" ] || error "${1}: No argument given"
+			set_format "${2}" || error "${1}: Format '${2}' isn't supported${msg_format%?}"
+			shift 2
+			;;
+		"--remove")
+			pl_remove=true
+	esac
+done
+
+
+# Check dependencies
+exit=false
+for dep in "youtube-dl" "ffmpeg"; do
+	[ "$(command -v ${dep})" ] && continue
+	error "Dependencies not met: ${1}" false
+	exit=true
+done
+${exit} && exit 1
+
+
+# Prompts the user for missing information
+# ${pl_url}, ${pl_dir}, ${pl_format} and ${pl_remove}
+if ! [ "${pl_url}" ]; then
+	printf 'Playlist URL: '
+	read pl_url
+	[ "${pl_url}" ] || error "URL not provided"
+	check_url "${pl_url}" || error "Invalid URL: ${2}"
+fi
+
+if ! [ "${pl_dir}" ]; then
+	printf 'Playlist Directory (Default `~/Music/`): '
+	read pl_dir
+	if ! [ "${pl_dir}" ]; then
+		if [ -d "${HOME}/Music" ]; then
+			pl_dir="${HOME}/Music"
+		else
+			error "Directory '~/Music/' doesn't exist"
+		fi
+	else
+		check_dir "${pl_dir}" || error "Invalid url: ${2}"
+	fi
+fi
+
+if ! [ "${pl_format}" ]; then
+	printf 'Playlist Format (Default mp3): '
+	read pl_format
+	if ! [ "${pl_format}" ]; then
+		set_format "mp3"
+	else
+		set_format "${pl_format}" || error "Unsupported format: '${pl_format}'${msg_format%?}"
+	fi
+fi
+
+if ! [ "${pl_remove}" ]; then
+	printf "Remove local media that aren't in the playlist?\n"
+	printf "\033[1;33mWARNING\033[0m: This will also delete files that aren't in"
+	printf "the provided format, which in this case is '${pl_format}'\n"
+	printf "${y_or_n} "
+	read pl_remove
+	case ${pl_remove} in
+		[Yy][Ee][Ss]|[Yy]) pl_remove=true ;;
+		*) pl_remove=false ;;
+	esac
+fi
+
+
+# Overview
+printf 'Getting playlist information, please wait...'
+pl_title=$(youtube-dl --playlist-end 1 -o "%(playlist)s" --get-filename "${pl_url}")
+pl_info=$(get_info)
+printf '\r\033[2K\n[ ─ \033[1;33mOVERVIEW\033[0m ─ ]\n'
+overview="
+  - Playlist URL: ${pl_url}
+  - Playlist Title: ${pl_title}
+  - Playlist Directory: ${pl_dir}
+  - Playlist Format: ${pl_format}
+"
+printf '%b' "${overview#?}"
+printf '  %s' '- Remove Media Not In Playlist: '
+if ${pl_remove}; then
+	printf '\033[1;32mtrue\033[0m\n'
+else
+	printf '\033[1;31mfalse\033[0m\n'
+fi
+printf 'Are you sure? %b ' "${y_or_n}"
+read reply
+case ${reply} in
+	[Yy][Ee][Ss]|[Yy])
+		IFS=${newline} sync_download "${pl_info}"
+		${pl_remove} && IFS=${newline} sync_remove "${pl_info}"
+		;;
+esac
