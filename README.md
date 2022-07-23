@@ -35,6 +35,7 @@ ytpl-sync --url "https://www.youtube.com/playlist?list=PLRV1hc8TIW-7znQIWaVarxdU
 
 Options include:
 - `--help`, display the help information
-- `--url ${url}`, use this url instead of prompting the user
-- `--dir ${directory}`, sync to this directory instead of prompting the user
-- `--remove`, remove videos/audio that aren't in the playlist (Use with caution)
+- `--url URL`, use this url instead of prompting the user
+- `--format FORMAT`, use this url instead of prompting the user
+- `--dir DIR`, sync to this directory instead of prompting the user
+- `--remove`, remove media that aren't in the playlist (Use with caution)
