@@ -212,7 +212,7 @@ fi
 if ! [ "${pl_remove}" ]; then
 	printf "Remove local media that aren't in the playlist?\n"
 	printf "\033[1;33mWARNING\033[0m: This will also delete files that aren't in"
-	printf "the provided format, which in this case is '${pl_format}'\n"
+	printf " the provided format, which in this case is '${pl_format}'\n"
 	printf "${y_or_n} "
 	read pl_remove
 	case ${pl_remove} in
