@@ -232,6 +232,7 @@ fi
 # Overview
 printf 'Getting playlist information, please wait...'
 pl_title=$(${bin} --playlist-end 1 -o "%(playlist)s" --get-filename "${pl_url}")
+[ "${pl_title}" ] || exit 1
 pl_info=$(get_info)
 printf '\r\033[2K\n[ ─ \033[1;33mOVERVIEW\033[0m ─ ]\n'
 overview="
