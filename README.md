@@ -22,7 +22,7 @@ curl -L https://raw.githubusercontent.com/Smeueg/ytpl-sync/main/ytpl-sync -o /us
 ```
 
 If you don't want to download the script to your filesystem and depending on how
-comfortable you are directly piping a script you "curl-d" you can also do this.
+comfortable you are directly piping a script you "curl-d", you can also do this.
 Do note that this is unsafe, and should be used at your own risk:
 ```bash
 sh <(curl -sNL https://raw.githubusercontent.com/Smeueg/ytpl-sync/main/ytpl-sync)
