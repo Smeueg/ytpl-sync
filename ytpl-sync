@@ -118,7 +118,7 @@ sync_download() {
 			fi
 		fi
 	done
-	${ran} || notice 'No media needed to be downloaded\n'
+	${ran} || notice 'No media needed to be downloaded'
 }
 
 sync_remove() {
