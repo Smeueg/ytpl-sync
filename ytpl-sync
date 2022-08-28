@@ -133,7 +133,7 @@ sync_remove() {
 		ran=true
 		rm -v "${pl_dir%/}/${file}"
 	done
-	${ran} || notice 'No media needed to be removed\n'
+	${ran} || notice 'No media needed to be removed'
 }
 
 # Argument handler
