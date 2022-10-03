@@ -1,7 +1,6 @@
 #!/bin/sh
 # TODO
-# - Replace "reserved characters" with alternatives for file names:
-#   https://stackoverflow.com/questions/10386344/how-to-get-a-file-in-windows-with-a-colon-in-the-filename#25477235
+# - Create an efficient shell function to replace 'sed'
 
 y_or_n="[\033[1;32my\033[0m/\033[31mN\033[0m]"
 msg_help="
@@ -48,15 +47,38 @@ replace() {
 # Get the whole playlist information separated by newlines
 # Information format: "${title} ${id}"
 get_info() {
+	t=$(tty)
 	${bin} "${pl_url}" --flat-playlist --get-id -e |
 		{
 			while { read -r title; read id; }; do
-				title=$(IFS="/" replace "\\" "${title}")
-				title=$(replace "/" "\\" "${title}")
+				# Replace forbidden filename characters
+				title=$(
+					printf '%s\n' "${title}" |
+						sed -e 's/\\\\/⑊/g' \
+							-e 's/"/”/g' \
+							-e 's|/|∕|g' \
+							-e 's/:/꞉/g' \
+							-e 's/</‹/g' \
+							-e 's/>/›/g' \
+							-e 's/?/︖/g' \
+							-e 's/\\/＼/g' \
+							-e 's/|/⏐/g'
+					 )
+				# title=$(replace "\\\\" "⑊" "${title}")
+				# title=$(replace '"' "”" "${title}")
+				# title=$(replace "*" "⁎" "${title}")
+				# title=$(replace "/" "∕" "${title}")
+				# title=$(replace ":" "꞉" "${title}")
+				# title=$(replace "<" "‹" "${title}")
+				# title=$(replace ">" "›" "${title}")
+				# title=$(replace "?" "︖" "${title}")
+				# title=$(replace "\\" "＼" "${title}")
+				# title=$(replace "|" "⏐" "${title}")
 				tmp="${tmp}${title} ${id}${newline}"
 			done
 			printf '%s\n\n' "${tmp}"
 		}
+	echo "done"
 }
 
 # Checks whether ${1} is a valid Youtube playlist url
@@ -103,6 +125,8 @@ sync_download() {
 	ran=false
 	for line in ${1}; do
 		title=${line% *}
+		echo "${title}"
+		continue
 		url="https://www.youtube.com/watch?v=${line##* }"
 		if ! [ -f "${pl_dir%/}/${title}.mp3" ]; then
 			ran=true
@@ -171,10 +195,11 @@ done
 
 # Check dependencies
 exit=false
-if ! [ "$(command -v ffmpeg)" ]; then
+for dep in ffmpeg sed; do
+	[ "$(command -v ${dep})" ] && continue
 	error "Dependencies not met: ${1}" false
 	exit=true
-fi
+done
 if [ "$(command -v yt-dlp)" ]; then
 	bin="yt-dlp"
 elif [ "$(command -v youtube-dl)" ]; then
