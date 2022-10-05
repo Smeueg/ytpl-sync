@@ -78,7 +78,6 @@ get_info() {
 			done
 			printf '%s\n\n' "${tmp}"
 		}
-	echo "done"
 }
 
 # Checks whether ${1} is a valid Youtube playlist url
@@ -125,8 +124,6 @@ sync_download() {
 	ran=false
 	for line in ${1}; do
 		title=${line% *}
-		echo "${title}"
-		continue
 		url="https://www.youtube.com/watch?v=${line##* }"
 		if ! [ -f "${pl_dir%/}/${title}.mp3" ]; then
 			ran=true
