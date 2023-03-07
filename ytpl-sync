@@ -48,7 +48,7 @@ replace() {
 # Information format: "${title} ${id}"
 get_info() {
 	t=$(tty)
-	${bin} "${pl_url}" --flat-playlist --get-id -e |
+	${bin} "${pl_url}" --flat-playlist --get-id -e --no-warnings |
 		{
 			while { read -r title; read id; }; do
 				# Replace forbidden filename characters
