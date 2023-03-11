@@ -261,7 +261,6 @@ pl_title=$(${bin} --playlist-end 1\
 				  --get-filename "${pl_url}"\
 				  --no-warnings)
 [ "${pl_title}" ] || exit 1
-pl_info=$(get_info)
 printf '\r\033[2K\n[ ─ \033[1;33mOVERVIEW\033[0m ─ ]\n'
 overview="
   - Playlist URL: ${pl_url}
@@ -269,18 +268,19 @@ overview="
   - Playlist Directory: ${pl_dir}
   - Playlist Format: ${pl_format}
 "
- printf '%b' "${overview#?}"
- printf '  %s' '- Remove Media Not In Playlist: '
- if ${pl_remove}; then
-	 printf '\033[1;32mtrue\033[0m\n'
- else
-	 printf '\033[1;31mfalse\033[0m\n'
- fi
- printf 'Are you sure? %b ' "${y_or_n}"
- read reply
- case ${reply} in
-	 [Yy][Ee][Ss]|[Yy])
-		 IFS=${newline} sync_download "${pl_info}"
-		 ${pl_remove} && IFS=${newline} sync_remove "${pl_info}"
-		 ;;
- esac
+printf '%b' "${overview#?}"
+printf '  %s' '- Remove Media Not In Playlist: '
+if ${pl_remove}; then
+	printf '\033[1;32mtrue\033[0m\n'
+else
+	printf '\033[1;31mfalse\033[0m\n'
+fi
+printf 'Are you sure? %b ' "${y_or_n}"
+read reply
+case ${reply} in
+	[Yy][Ee][Ss]|[Yy])
+		pl_info=$(get_info)
+		IFS=${newline} sync_download "${pl_info}"
+		${pl_remove} && IFS=${newline} sync_remove "${pl_info}"
+		;;
+esac
