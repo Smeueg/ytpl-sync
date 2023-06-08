@@ -62,7 +62,9 @@ get_info() {
 							-e 's/>/›/g' \
 							-e 's/?/︖/g' \
 							-e 's/\\/＼/g' \
-							-e 's/|/⏐/g'
+							-e 's/|/⏐/g' \
+                            -e "s/^[.]*//" \
+                            -e 's/^ *//'
 					 )
 				# title=$(replace "\\\\" "⑊" "${title}")
 				# title=$(replace '"' "”" "${title}")
