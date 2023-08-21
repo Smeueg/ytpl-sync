@@ -121,7 +121,7 @@ sync_download() {
 		 			   --audio-format "${pl_format}" \
 		 			   --add-metadata --metadata-from-title "%(title)s" \
 		 			   --postprocessor-args \
-		 			   "-acodec libmp3lame" \
+		 			   "ffmpeg:-acodec libmp3lame" \
 		 			   -o "${pl_dir}/${title}.%(ext)s"
 			else
 				${bin} "${url}" \
