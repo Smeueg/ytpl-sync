@@ -146,7 +146,7 @@ class PlaylistInfo:
         return title
 
     def __init__(self, url: str):
-        with YoutubeDL({"extract_flat": True}) as ytdl:
+        with YoutubeDL({"extract_flat": True, "quiet": True}) as ytdl:
             info = ytdl.sanitize_info(ytdl.extract_info(url, download=False))
             info_json = json.loads(json.dumps(info))
         self.title = info_json["title"]
