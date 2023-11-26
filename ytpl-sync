@@ -211,7 +211,7 @@ class Syncer:
                                 {'key': 'FFmpegConcat',
                                     'only_multi_video': True,
                                     'when': 'playlist'}],
-                # 'quiet': True,
+                'quiet': True,
                 'retries': 10
             }
         else:
@@ -346,6 +346,7 @@ class Syncer:
         UI.footer(8)
 
         if not UI.promptYN("Do you want to continue?"):
+            print("")
             sys.exit(0)
 
     def sync(self) -> None:
