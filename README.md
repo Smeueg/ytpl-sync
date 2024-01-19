@@ -25,11 +25,11 @@ If you don't want to download the script to your filesystem and depending on how
 comfortable you are directly piping a script you "curl-d", you can also do this.
 Do note that this is unsafe, and should be used at your own risk:
 ```bash
-python3 <(curl -sNL https://raw.githubusercontent.com/Smeueg/ytpl-sync/main/ytpl-sync)
+sh <(curl -sNL https://raw.githubusercontent.com/Smeueg/ytpl-sync/main/ytpl-sync)
 ```
 or with options:
 ```bash
-python3 <(curl -sNL https://raw.githubusercontent.com/Smeueg/ytpl-sync/main/ytpl-sync) --format mp3
+sh <(curl -sNL https://raw.githubusercontent.com/Smeueg/ytpl-sync/main/ytpl-sync) --format mp3
 ```
 
 ## Usage
