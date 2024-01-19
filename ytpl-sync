@@ -194,7 +194,7 @@ done
 exit=false
 for dep in ffmpeg sed; do
 	[ "$(command -v ${dep})" ] && continue
-	error "Dependencies not met: ${1}" false
+	error "Dependencies not met: ${dep}" false
 	exit=true
 done
 if [ "$(command -v yt-dlp)" ]; then
