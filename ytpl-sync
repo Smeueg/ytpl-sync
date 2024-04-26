@@ -1,286 +1,291 @@
-#!/bin/sh
-# TODO
-# - Create an efficient shell function to replace 'sed'
-
-y_or_n="[\033[1;32my\033[0m/\033[31mN\033[0m]"
-msg_help="
-Usage: ${0##*/} [OPTION...]
-Sync a Youtube playlist to a directory
-
-Options:
-  --help           Show this message.
-  --url URL        Sync URL and don't prompt for a url
-  --dir DIR        Sync to DIR and don't prompt for a directory
-  --format FORMAT  Download media to FORMAT
-  --remove         Remove videos/audios that aren't in the playlist
-                   (use with caution)
-  --format-list    Print the supported formats
-"
-msg_format="
-Supported formats are:
-  - Video: mp4, webm
-  - Audio: aac, flac, mp3, m4a, opus, vorbis, wav
-"
-newline="
-"
-
-error() {
-	printf '[\033[1;31mERROR\033[0m] %s\n' "${1}"
-	if ! [ "${2}" ] || ${2}; then exit 1; fi
-}
-
-notice() {
-	printf '[\033[1;32mNOTICE\033[0m] %s\n' "${1}"
-}
+#!/bin/python3
+# Check Python version
+import sys
+MINIMUM_PYTHON_VERSION = (3, 8)
+if sys.version_info < MINIMUM_PYTHON_VERSION:
+    print(
+        "\033[1;31m ! \033[m "
+        "This script requires at least Python version {}"
+        .format(".".join(tuple(map(str, MINIMUM_PYTHON_VERSION)))),
+        file=sys.stderr
+    )
+    sys.exit(1)
 
 
-# Replace ${1} with ${2} in the variable ${3}
-replace() {
-	str=${3}
-	while ! [ "${str%%*${1}*}" ]; do
-	 	str="${str%%${1}*}${2}${str#*${1}}"
-	done
-	printf '%s\n' "${str}"
-	unset str
-}
-
-# Get the whole playlist information separated by newlines
-# Information format: "${title} ${id}"
-get_info() {
-	t=$(tty)
-	${bin} "${pl_url}" --flat-playlist --get-id -e --no-warnings |
-		{
-			while { read -r title; read id; }; do
-				# Replace forbidden filename characters
-				title=$(
-					printf '%s\n' "${title}" |
-						sed -e 's/"/”/g' \
-					        -e 's|/|╱|g' \
-					        -e 's/:/꞉/g' \
-					        -e 's/</‹/g' \
-					        -e 's/>/›/g' \
-					        -e 's/?/︖/g' \
-					        -e 's/\\/╲/g' \
-					        -e 's/|/│/g' \
-                            -e "s/^[.]*//" \
-                            -e 's/^ *//'
-					 )
-				tmp="${tmp}${title} ${id}${newline}"
-			done
-			printf '%s\n\n' "${tmp}"
-		}
-}
-
-# Checks whether ${1} is a valid Youtube playlist url
-check_url() {
-	id=${1#https://www.youtube.com/playlist\?list=}
-	[ ${#id} -ne 34 ] && return 1
-	return 0
-}
-
-# Checks whether ${1} is a directory
-check_dir() {
-	[ -d "${1}" ] || return 1
-	return 0
-}
-
-# Sets ${1} as ${pl_format} or return 1 if it's not a supported format
-set_format() {
-	for format in "mp4" "webm"; do
-		[ "${1}" = "${format}" ] || continue
-		pl_format=${1}
-		pl_type="video"
-		return 0
-	done
-	for format in "aac" "flac" "mp3" "m4a" "opus" "vorbis"; do
-		[ "${1}" = "${format}" ] || continue
-		pl_format=${1}
-		pl_type="audio"
-		return 0
-	done
-	return 1
-}
-
-# Downloads the missing media from the playlist
-sync_download() {
-	printf '\n[ ─ \033[1;34mDOWNLOADING PLAYLIST\033[0m ─ ]\n'
-	ran=false
-	for line in ${1}; do
-		title=${line% *}
-		url="https://www.youtube.com/watch?v=${line##* }"
-		if ! [ -f "${pl_dir%/}/${title}.${pl_format}" ]; then
-			ran=true
-            printf "\033[1;34mDownloading\033[m %s.%s\n" \
-                   "${title}" \
-                   "${pl_format}"
-			if [ "${pl_type}" = "audio" ]; then
-		   		${bin} "${url}" \
-                       -q \
-                       --progress \
-				       -x \
-		 			   --audio-format "${pl_format}" \
-		 			   --add-metadata --metadata-from-title "%(title)s" \
-		 			   --postprocessor-args \
-		 			   "ffmpeg:-acodec libmp3lame" \
-		 			   -o "${pl_dir}/${title}.%(ext)s"
-			else
-				${bin} "${url}" \
-                       -q \
-                       --progress \
-				       --add-metadata --metadata-from-title "$(title)s" \
-					   -o "${pl_dir}/${title}.%(ext)s"
-			fi
-            if [ $? -ne 0 ]; then # If ytdl fails
-                printf "\033[1;31mFailed\033[m to download %s\n" \
-                       "${title}.${pl_format}"
-                exit 1
-            fi
-        else
-            printf "\033[1;33mSkipping\033[m %s.%s, already exists\n" \
-                   "${title}" \
-                   "${pl_format}"
-        fi
-	done
-	${ran} || notice 'No media needed to be downloaded'
-}
-
-sync_remove() {
-	# Remove song's that aren't in the playlist anymore
-	printf '\n[ ─ \033[1;31mREMOVING MEDIA\033[0m ─ ]\n'
-	ran=false
-	for file in "${pl_dir%/}"/*; do
-		file=${file#${pl_dir%/}/}
-		for line in ${1}; do
-			[ "${line% *}.${pl_format}" = "${file}" ] && continue 2
-		done
-		ran=true
-        printf "\033[1;31mRemoving\033[m %s\n" "${file}"
-		rm "${pl_dir%/}/${file}"
-	done
-	${ran} || notice 'No media needed to be removed'
-}
-
-# Argument handler
-while [ "${1}" ]; do
-	case ${1} in
-		"--help")
-			printf '%b' "${msg_help#?}"
-			exit 0
-			;;
-		"--url")
-			[ "${2}" ] || error "${1}: No argument given"
-			check_url "${2}" || error "${1}: Invalid url '${2}'"
-			pl_url=${2}
-			shift 2
-			;;
-		"--dir")
-			[ "${2}" ] || error "${1}: No argument given"
-			check_dir "${2}" || error "${1}: Directory '${2}' doesn't exist"
-			pl_dir=${2}
-			shift 2
-			;;
-		"--format")
-			[ "${2}" ] || error "${1}: No argument given"
-			set_format "${2}" || error "${1}: Format '${2}' isn't supported${msg_format%?}"
-			shift 2
-			;;
-		"--remove")
-			pl_remove=true
-	esac
-done
+import os
+import shutil
+import subprocess
+import enum
+import re
+# Constants
+PLAYLIST_URL_REGEX = r'^(https?://)?(www\.)?(youtube\.com/playlist\?list=|youtu\.be/)([\w-]+)(\S+)?$'
+DOWNLOADERS = ("yt-dlp", "youtube-dl")
 
 
-# Check dependencies
-exit=false
-for dep in ffmpeg sed; do
-	[ "$(command -v ${dep})" ] && continue
-	error "Dependencies not met: ${dep}" false
-	exit=true
-done
-if [ "$(command -v yt-dlp)" ]; then
-	bin="yt-dlp"
-elif [ "$(command -v youtube-dl)" ]; then
-	bin="youtube-dl"
-else
-	error "Both \`youtube-dl\` and \`yt-dlp\` are not installed, please install one of them to continue"
-	exit=true
-fi
-${exit} && exit 1
+# Helper Functions
+def eprint(string: str, **kwargs) -> None:
+    """Prints the first argument to stderr with a red color prefix"""
+    print(f"\033[1;31m!\033[0m {string}", **kwargs, file=sys.stderr)
+
+def iprint(string: str, **kwargs) -> None:
+    """Prints the first argument to stdout with a green color prefix"""
+    print(f"\033[1;32m*\033[0m {string}", **kwargs)
+
+def header(string: str) -> None:
+    """Prints `string` to stdout with a decorated output"""
+    print(f"\033[1;7m  {string}  \033[m")
+
+def print_help() -> None:
+    """Prints the help information"""
+    print(
+        "\033[32mUsage\033[m: ytpl-sync"
+        " \033[1;34m[URL]\033[m"
+        " \033[1;34m[DIRECTORY]\033[m"
+        " \033[1;34m[FORMAT]\033[m\n"
+        "Synch a playlist from Youtube to a local directory"
+    )
+
+def ask_yes_or_no(question: str) -> bool:
+    """Asks the user a yes or no question, entering nothing will result in the
+    default response of \"no\""""
+    while True:
+        print(
+            "\033[1;32m?\033[m "
+            f"\033[1m{question}\033[m "
+            "[\033[1;32my\033[m/\033[1;31mN\033[m] ",
+            end=""
+        )
+
+        response = input().lower()
+        print("\033[A\033[K", end="")
+        if response in ("yes", "y"):
+            return True
+        if response in ("", "no", "n"):
+            return False
 
 
-# Prompts the user for missing information
-# ${pl_url}, ${pl_dir}, ${pl_format} and ${pl_remove}
-if ! [ "${pl_url}" ]; then
-	printf 'Playlist URL: '
-	read pl_url
-	[ "${pl_url}" ] || error "URL not provided"
-	check_url "${pl_url}" || error "Invalid URL: ${pl_url}"
-fi
-
-if ! [ "${pl_dir}" ]; then
-	printf 'Playlist Directory (Default `~/Music/`): '
-	read pl_dir
-	if ! [ "${pl_dir}" ]; then
-		if [ -d "${HOME}/Music" ]; then
-			pl_dir="${HOME}/Music"
-		else
-			error "Directory '~/Music/' doesn't exist"
-		fi
-	else
-		check_dir "${pl_dir}" || error "Directory doesn't exist: ${pl_dir}"
-	fi
-fi
-
-if ! [ "${pl_format}" ]; then
-	printf 'Playlist Format (Default mp3): '
-	read pl_format
-	if ! [ "${pl_format}" ]; then
-		set_format "mp3"
-	else
-		set_format "${pl_format}" || error "Unsupported format: '${pl_format}'${msg_format%?}"
-	fi
-fi
-
-if ! [ "${pl_remove}" ]; then
-	printf "Remove local media that aren't in the playlist?\n"
-	printf "\033[1;33mWARNING\033[0m: This will also delete files that aren't in"
-	printf " the provided format, which in this case is '${pl_format}'\n"
-	printf "${y_or_n} "
-	read pl_remove
-	case ${pl_remove} in
-		[Yy][Ee][Ss]|[Yy]) pl_remove=true ;;
-		*) pl_remove=false ;;
-	esac
-fi
+class ExitCode(enum.Enum):
+    """A list of exit codes to be used with `sys.exit()`"""
+    NO_DOWNLOADERS_FOUND = 2
+    INVALID_PLAYLIST_URL = 3
+    INVALID_DIRECTORY = 4
+    UNSUPPORTED_FORMAT = 5
+    NOT_ENOUGH_ARGUMENTS = 6
+    FFMPEG_NOT_FOUND = 7
 
 
-# Overview
-printf 'Getting playlist information, please wait...'
-pl_title=$(${bin} --playlist-end 1\
-				  -o "%(playlist)s"\
-				  --get-filename "${pl_url}"\
-				  --no-warnings)
-[ "${pl_title}" ] || exit 1
-printf '\r\033[2K\n[ ─ \033[1;33mOVERVIEW\033[0m ─ ]\n'
-overview="
-  - Playlist URL: ${pl_url}
-  - Playlist Title: ${pl_title}
-  - Playlist Directory: ${pl_dir}
-  - Playlist Format: ${pl_format}
-"
-printf '%b' "${overview#?}"
-printf '  %s' '- Remove Media Not In Playlist: '
-if ${pl_remove}; then
-	printf '\033[1;32mtrue\033[0m\n'
-else
-	printf '\033[1;31mfalse\033[0m\n'
-fi
-printf 'Are you sure? %b ' "${y_or_n}"
-read reply
-case ${reply} in
-	[Yy][Ee][Ss]|[Yy])
-		pl_info=$(get_info)
-		IFS=${newline} sync_download "${pl_info}"
-		${pl_remove} && IFS=${newline} sync_remove "${pl_info}"
-		;;
-esac
+class Config():
+    """The parsed configuration options from the CLI args"""
+    def __init__(self):
+        # Handle Arguments
+        if len(sys.argv) < 4:
+            print_help()
+            sys.exit(ExitCode.NOT_ENOUGH_ARGUMENTS.value)
+        self.playlist_url = sys.argv[1]
+        self.target_directory = os.path.expanduser(sys.argv[2])
+        self.target_format = sys.argv[3]
+
+        # Check whether it's a valid Youtube Playlist URL
+        if not re.match(PLAYLIST_URL_REGEX, self.playlist_url):
+            eprint(f"\"{self.playlist_url}\" is not a valid Youtube Playlist url")
+            sys.exit(ExitCode.INVALID_PLAYLIST_URL.value)
+        # Check whether the target directory exists
+        if not os.path.isdir(self.target_directory):
+            eprint(f"\"{self.target_directory}\" is not a directory")
+            sys.exit(ExitCode.INVALID_DIRECTORY.value)
+        if not os.access(self.target_directory, os.W_OK):
+            eprint(f"\"{self.target_directory}\" does not have write permissions")
+            sys.exit(ExitCode.INVALID_DIRECTORY.value)
+
+        # Check whether the format is supported
+        if self.target_format in PlaylistType.VIDEO.value:
+            self.type = PlaylistType.VIDEO
+        elif self.target_format in PlaylistType.AUDIO.value:
+            self.type = PlaylistType.AUDIO
+        else:
+            eprint(
+                f"\"{self.target_format}\" is not a valid format, "
+                "see a list with the `pl-syncher -h`"
+            )
+            sys.exit(ExitCode.UNSUPPORTED_FORMAT.value)
+
+        
+        # Get the installed downloader binary path
+        self.downloader_path: str | None = next(
+            (d for d in DOWNLOADERS if shutil.which(d)),
+            None
+        )
+        if self.downloader_path is None:
+            eprint(
+                "This script requires one of the following programs: {}"
+                .format(", ".join(f"\033[1;34m{d}\033[m" for d in DOWNLOADERS))
+            )
+            sys.exit(ExitCode.NO_DOWNLOADERS_FOUND.value)
+
+
+class PlaylistType(enum.Enum):
+    """An enum for the available playlist types"""
+    AUDIO = ["mp3"]
+    VIDEO = ["mp4"]
+
+
+class Video:
+    """An individual video containing a title and a url"""
+    def __init__(self, video_title: str, video_id: str):
+        self.title: str = video_title
+        self.url: str = f"https://www.youtube.com/watch?v={video_id}"
+
+
+class PlaylistDownloader:
+    """A downloader to download the playlist"""
+    def __init__(self, config: Config):
+        self.config = config
+        # Get the title of the playlist
+        self.title: str = subprocess.run(
+            [
+                self.config.downloader_path or "",
+                "--playlist-end",
+                "1",
+                "-o", "%(playlist)s",
+                "--get-filename", self.config.playlist_url,
+                "--no-warnings"
+            ],
+            capture_output=True,
+            encoding="utf-8",
+            check=False
+        ).stdout
+        # Get the list of videos
+        data_stream = iter(
+            subprocess.run(
+                [
+                    config.downloader_path or "",
+                    config.playlist_url,
+                    "--flat-playlist",
+                    "--get-id",
+                    "-e",
+                    "--no-warnings"
+                ],
+                capture_output=True,
+                encoding="utf-8",
+                check=False
+            ).stdout.splitlines()
+        )
+        self.videos: list[Video] = []
+        for title in data_stream:
+            title = title.replace("\"", "”")
+            title = title.replace("/", "╱")
+            title = title.replace(":", "꞉")
+            title = title.replace("<", "‹")
+            title = title.replace(">", "›")
+            title = title.replace("?", "︖")
+            title = title.replace("\\", "╲")
+            title = title.replace("|", "│")
+            title = title.replace("", "")
+            title = title.strip(" ")
+            title = title.strip(".")
+            id = next(data_stream)
+            self.videos.append(Video(title, id))
+
+    def prompt_overview(self) -> bool:
+        """Ask the user whether they are sure about the details of the
+        playlist"""
+        header("Overview")
+        print(
+            f"\033[1;35m*\033[m Title         : {self.title}"
+            f"\033[1;35m*\033[m Videos        : {len(self.videos)}\n"
+            f"\033[1;35m*\033[m URL           : {self.config.playlist_url}\n"
+            f"\033[1;35m*\033[m Target Format : {self.config.target_format}\n",
+            end=""
+        )
+        return ask_yes_or_no("Do you want to continue?")
+
+
+    def download(self):
+        """A function to download the whole playlist, skipping videos that has
+        already been downloaded before """
+        header("Downloading Playlist")
+        base_args = [
+            "-q",
+            "--progress",
+            "--no-warnings",
+            "--embed-thumbnail",
+            "--add-metadata", "--metadata-from-title", "%(title)s",
+        ]
+
+        if self.config.type == PlaylistType.AUDIO:
+            base_args.append("-x")
+            base_args.append("--audio-format")
+            base_args.append(self.config.target_format)
+            base_args.append("--postprocessor-args")
+            base_args.append("ffmpeg:-acodec libmp3lame")
+
+        for video in self.videos:
+            filename = "{}/{}.{}".format(
+                self.config.target_directory,
+                video.title,
+                self.config.target_format
+            )
+            if os.path.isfile(filename):
+                iprint(
+                    "\"\033[34m{}.{}\033[m\" already exists, skipping".format(
+                        video.title,
+                        self.config.target_format
+                    )
+                )
+            else:
+                iprint(
+                    "Downloading \"\033[34m{}.{}\033[m\"".format(
+                        video.title,
+                        self.config.target_format
+                    )
+                )
+                subprocess.run(
+                    [self.config.downloader_path or ""]
+                    + [video.url]
+                    + base_args
+                    + ["-o", filename],
+                    check=False
+                )
+
+    def delete(self):
+        """A function to delete files that are no longer in the playlist"""
+        header("Removing Files Not In The Playlist")
+        playlist_items: list[str] = [
+            "{}.{}".format(
+                video.title,
+                self.config.target_format
+            )
+            for video in self.videos
+        ]
+
+        existing_files: list[str] = next(
+            os.walk(self.config.target_directory),
+            (None, None, [])
+        )[2]
+
+        for file in existing_files:
+            if not file in playlist_items:
+                iprint(f"Removing {file}")
+                os.remove(f"{self.config.target_directory}/{file}")
+
+
+
+def main() -> None:
+    """The main function"""
+    # Check for FFmpeg
+    if not shutil.which("ffmpeg"):
+        eprint(
+            "The CLI tool `\033[1;31mffmpeg\033[m`, is required to run this "
+            "script"
+        )
+        sys.exit(ExitCode.FFMPEG_NOT_FOUND.value)
+
+    playlist = PlaylistDownloader(Config())
+    if playlist.prompt_overview():
+        playlist.download()
+        if ask_yes_or_no("Delete files that aren't in the playlist?"):
+            playlist.delete()
+
+
+if __name__ == "__main__":
+    main()
