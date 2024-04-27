@@ -1,13 +1,15 @@
 #!/bin/python3
 # Check Python version
 import sys
+
 MINIMUM_PYTHON_VERSION = (3, 8)
 if sys.version_info < MINIMUM_PYTHON_VERSION:
     print(
         "\033[1;31m ! \033[m "
-        "This script requires at least Python version {}"
-        .format(".".join(tuple(map(str, MINIMUM_PYTHON_VERSION)))),
-        file=sys.stderr
+        "This script requires at least Python version {}".format(
+            ".".join(tuple(map(str, MINIMUM_PYTHON_VERSION)))
+        ),
+        file=sys.stderr,
     )
     sys.exit(1)
 
@@ -17,8 +19,11 @@ import shutil
 import subprocess
 import enum
 import re
+
 # Constants
-PLAYLIST_URL_REGEX = r'^(https?://)?(www\.)?(youtube\.com/playlist\?list=|youtu\.be/)([\w-]+)(\S+)?$'
+PLAYLIST_URL_REGEX = (
+    r"^(https?://)?(www\.)?(youtube\.com/playlist\?list=|youtu\.be/)([\w-]+)(\S+)?$"
+)
 DOWNLOADERS = ("yt-dlp", "youtube-dl")
 
 
@@ -27,13 +32,16 @@ def eprint(string: str, **kwargs) -> None:
     """Prints the first argument to stderr with a red color prefix"""
     print(f"\033[1;31m!\033[0m {string}", **kwargs, file=sys.stderr)
 
+
 def iprint(string: str, **kwargs) -> None:
     """Prints the first argument to stdout with a green color prefix"""
     print(f"\033[1;32m*\033[0m {string}", **kwargs)
 
+
 def header(string: str) -> None:
     """Prints `string` to stdout with a decorated output"""
     print(f"\033[1;7m  {string}  \033[m")
+
 
 def print_help() -> None:
     """Prints the help information"""
@@ -45,15 +53,16 @@ def print_help() -> None:
         "Synch a playlist from Youtube to a local directory"
     )
 
+
 def ask_yes_or_no(question: str) -> bool:
     """Asks the user a yes or no question, entering nothing will result in the
-    default response of \"no\""""
+    default response of \"no\" """
     while True:
         print(
             "\033[1;32m?\033[m "
             f"\033[1m{question}\033[m "
             "[\033[1;32my\033[m/\033[1;31mN\033[m] ",
-            end=""
+            end="",
         )
 
         response = input().lower()
@@ -66,6 +75,7 @@ def ask_yes_or_no(question: str) -> bool:
 
 class ExitCode(enum.Enum):
     """A list of exit codes to be used with `sys.exit()`"""
+
     NO_DOWNLOADERS_FOUND = 2
     INVALID_PLAYLIST_URL = 3
     INVALID_DIRECTORY = 4
@@ -74,27 +84,28 @@ class ExitCode(enum.Enum):
     FFMPEG_NOT_FOUND = 7
 
 
-class Config():
+class Config:
     """The parsed configuration options from the CLI args"""
+
     def __init__(self):
         # Handle Arguments
         if len(sys.argv) < 4:
             print_help()
             sys.exit(ExitCode.NOT_ENOUGH_ARGUMENTS.value)
-        self.playlist_url = sys.argv[1]
-        self.target_directory = os.path.expanduser(sys.argv[2])
-        self.target_format = sys.argv[3]
+        self.playlist_url: str = sys.argv[1]
+        self.target_directory: str = os.path.expanduser(sys.argv[2])
+        self.target_format: str = sys.argv[3]
 
         # Check whether it's a valid Youtube Playlist URL
         if not re.match(PLAYLIST_URL_REGEX, self.playlist_url):
-            eprint(f"\"{self.playlist_url}\" is not a valid Youtube Playlist url")
+            eprint(f'"{self.playlist_url}" is not a valid Youtube Playlist url')
             sys.exit(ExitCode.INVALID_PLAYLIST_URL.value)
         # Check whether the target directory exists
         if not os.path.isdir(self.target_directory):
-            eprint(f"\"{self.target_directory}\" is not a directory")
+            eprint(f'"{self.target_directory}" is not a directory')
             sys.exit(ExitCode.INVALID_DIRECTORY.value)
         if not os.access(self.target_directory, os.W_OK):
-            eprint(f"\"{self.target_directory}\" does not have write permissions")
+            eprint(f'"{self.target_directory}" does not have write permissions')
             sys.exit(ExitCode.INVALID_DIRECTORY.value)
 
         # Check whether the format is supported
@@ -104,33 +115,34 @@ class Config():
             self.type = PlaylistType.AUDIO
         else:
             eprint(
-                f"\"{self.target_format}\" is not a valid format, "
+                f'"{self.target_format}" is not a valid format, '
                 "see a list with the `pl-syncher -h`"
             )
             sys.exit(ExitCode.UNSUPPORTED_FORMAT.value)
 
-        
         # Get the installed downloader binary path
         self.downloader_path: str | None = next(
-            (d for d in DOWNLOADERS if shutil.which(d)),
-            None
+            (d for d in DOWNLOADERS if shutil.which(d)), None
         )
         if self.downloader_path is None:
             eprint(
-                "This script requires one of the following programs: {}"
-                .format(", ".join(f"\033[1;34m{d}\033[m" for d in DOWNLOADERS))
+                "This script requires one of the following programs: {}".format(
+                    ", ".join(f"\033[1;34m{d}\033[m" for d in DOWNLOADERS)
+                )
             )
             sys.exit(ExitCode.NO_DOWNLOADERS_FOUND.value)
 
 
 class PlaylistType(enum.Enum):
     """An enum for the available playlist types"""
+
     AUDIO = ["mp3"]
     VIDEO = ["mp4"]
 
 
 class Video:
     """An individual video containing a title and a url"""
+
     def __init__(self, video_title: str, video_id: str):
         self.title: str = video_title
         self.url: str = f"https://www.youtube.com/watch?v={video_id}"
@@ -138,6 +150,7 @@ class Video:
 
 class PlaylistDownloader:
     """A downloader to download the playlist"""
+
     def __init__(self, config: Config):
         self.config = config
         # Get the title of the playlist
@@ -146,13 +159,15 @@ class PlaylistDownloader:
                 self.config.downloader_path or "",
                 "--playlist-end",
                 "1",
-                "-o", "%(playlist)s",
-                "--get-filename", self.config.playlist_url,
-                "--no-warnings"
+                "-o",
+                "%(playlist)s",
+                "--get-filename",
+                self.config.playlist_url,
+                "--no-warnings",
             ],
             capture_output=True,
             encoding="utf-8",
-            check=False
+            check=False,
         ).stdout
         # Get the list of videos
         data_stream = iter(
@@ -163,16 +178,16 @@ class PlaylistDownloader:
                     "--flat-playlist",
                     "--get-id",
                     "-e",
-                    "--no-warnings"
+                    "--no-warnings",
                 ],
                 capture_output=True,
                 encoding="utf-8",
-                check=False
+                check=False,
             ).stdout.splitlines()
         )
         self.videos: list[Video] = []
         for title in data_stream:
-            title = title.replace("\"", "”")
+            title = title.replace('"', "”")
             title = title.replace("/", "╱")
             title = title.replace(":", "꞉")
             title = title.replace("<", "‹")
@@ -195,21 +210,22 @@ class PlaylistDownloader:
             f"\033[1;35m*\033[m Videos        : {len(self.videos)}\n"
             f"\033[1;35m*\033[m URL           : {self.config.playlist_url}\n"
             f"\033[1;35m*\033[m Target Format : {self.config.target_format}\n",
-            end=""
+            end="",
         )
         return ask_yes_or_no("Do you want to continue?")
 
-
     def download(self):
         """A function to download the whole playlist, skipping videos that has
-        already been downloaded before """
+        already been downloaded before"""
         header("Downloading Playlist")
         base_args = [
             "-q",
             "--progress",
             "--no-warnings",
             "--embed-thumbnail",
-            "--add-metadata", "--metadata-from-title", "%(title)s",
+            "--add-metadata",
+            "--metadata-from-title",
+            "%(title)s",
         ]
 
         if self.config.type == PlaylistType.AUDIO:
@@ -221,22 +237,18 @@ class PlaylistDownloader:
 
         for video in self.videos:
             filename = "{}/{}.{}".format(
-                self.config.target_directory,
-                video.title,
-                self.config.target_format
+                self.config.target_directory, video.title, self.config.target_format
             )
             if os.path.isfile(filename):
                 iprint(
-                    "\"\033[34m{}.{}\033[m\" already exists, skipping".format(
-                        video.title,
-                        self.config.target_format
+                    '"\033[34m{}.{}\033[m" already exists, skipping'.format(
+                        video.title, self.config.target_format
                     )
                 )
             else:
                 iprint(
-                    "Downloading \"\033[34m{}.{}\033[m\"".format(
-                        video.title,
-                        self.config.target_format
+                    'Downloading "\033[34m{}.{}\033[m"'.format(
+                        video.title, self.config.target_format
                     )
                 )
                 subprocess.run(
@@ -244,23 +256,19 @@ class PlaylistDownloader:
                     + [video.url]
                     + base_args
                     + ["-o", filename],
-                    check=False
+                    check=False,
                 )
 
     def delete(self):
         """A function to delete files that are no longer in the playlist"""
         header("Removing Files Not In The Playlist")
         playlist_items: list[str] = [
-            "{}.{}".format(
-                video.title,
-                self.config.target_format
-            )
+            "{}.{}".format(video.title, self.config.target_format)
             for video in self.videos
         ]
 
         existing_files: list[str] = next(
-            os.walk(self.config.target_directory),
-            (None, None, [])
+            os.walk(self.config.target_directory), (None, None, [])
         )[2]
 
         for file in existing_files:
@@ -269,14 +277,12 @@ class PlaylistDownloader:
                 os.remove(f"{self.config.target_directory}/{file}")
 
 
-
 def main() -> None:
     """The main function"""
     # Check for FFmpeg
     if not shutil.which("ffmpeg"):
         eprint(
-            "The CLI tool `\033[1;31mffmpeg\033[m`, is required to run this "
-            "script"
+            "The CLI tool `\033[1;31mffmpeg\033[m`, is required to run this " "script"
         )
         sys.exit(ExitCode.FFMPEG_NOT_FOUND.value)
 
